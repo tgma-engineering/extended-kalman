@@ -18,9 +18,10 @@ class ExtendedKalman:
         self.P = P_0  # Initial State Error Covariance
         self.t = t_0  # Initial time
 
-        # Jacobians for Kalman Filter linearization
-        self.F = lambda x, u, t : self.jacobian(f, x, u, t) if F == None else F
-        self.H = lambda x, u, t : self.jacobian(h, x, u, t) if H == None else H
+        # Jacobians for Kalman Filter linearization. Numerical Jacobians
+        # can be supplied via F and H for performance (highly recommended!)
+        self.F = lambda x, u, t : self._jacobian(f, x, u, t) if F == None else F
+        self.H = lambda x, u, t : self._jacobian(h, x, u, t) if H == None else H
 
     def step(self, u, dt):
         """
@@ -88,7 +89,7 @@ class ExtendedKalman:
 
         return new_x, new_P 
 
-    def jacobian(self, f, x, u, t, eps=1e-4):
+    def _jacobian(self, f, x, u, t, eps=1e-4):
         """
         Compute numerical Jacobian with respect to x of
         vector function f at point x, u, t.
