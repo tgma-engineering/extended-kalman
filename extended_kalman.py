@@ -1,4 +1,12 @@
-import numyp as np
+"""
+This is an implementation of the Continuous-Discrete Iterated Extended Kalman Filter
+for optimal Estimation of nonlinear dynamical systems.
+
+Author: Marvin Ahlborn
+Reference: "Applied Optimal Estimation" by Arthur Gelb
+"""
+
+import numpy as np
 
 class ExtendedKalman:
     def __init__(self, f, h, Q, R, x_0, P_0, t_0=.0, F=None, H=None):
@@ -16,7 +24,7 @@ class ExtendedKalman:
 
     def step(self, u, dt):
         """
-        State and Covariance propagation via Classical Runge-Kutta Integration.
+        Continuous State and Covariance propagation via Classical Runge-Kutta Integration.
         """
         x = self.x
         P = self.P
@@ -46,8 +54,39 @@ class ExtendedKalman:
 
         return new_x, new_P
 
-    def measurement(self, z, u):
-        pass
+    def measurement(self, z, u, max_i=1, eps=.0):
+        """
+        Update state and error covariance according to measurement z.
+        Iterate until x estimate converges: max(abs(new_x - x)) <= eps.
+        Stops if x doesnt converge after max_i iterations.
+        If iteration number is supposed to be fixed at max_i, set eps=.0
+        """
+        x = self.x
+        P = self.P
+        t = self.t
+
+        new_x = x
+        H = None
+
+        for _ in range(max_i):
+            H = self.H(new_x, u, t)  # Linearize about most recent estimate
+
+            temp = H @ P @ H.T + self.R
+            temp_inv = np.linalg.inv(temp)
+            K = P @ H.T @ temp_inv  # Filter gain matrix
+
+            new_x = x + K @ (z - self.h(new_x, u, t) - H @ (x - new_x))  # Updated state
+
+            if np.max(np.abs(new_x - x)) <= eps:  # Stop loop if x converges.
+                break
+
+        I = np.eye(len(P), dtype=np.float32)
+        new_P = (I - K @ H) @ P  # Updated error covariance
+
+        self.x = new_x
+        self.P = new_P
+
+        return new_x, new_P 
 
     def jacobian(self, f, x, u, t, eps=1e-4):
         """
@@ -65,34 +104,3 @@ class ExtendedKalman:
             F[:, i] = (f_plus[:, 0] - f_def[:, 0]) / eps  # Finite difference
         
         return F
-
-    def rk4(self, f, x, t, dt):
-        """
-        Classical Runge-Kutta Integration.
-        f is a Vector function of the form x_dot = f(x, u, t).
-        x, u and t are the current state, actuation and time
-        (actuation is taken as constant of time period dt).
-        Estimate for x at time t+dt is computed.
-        """
-        k1 = f(x, t)
-        k2 = f(x + dt/2 * k1, t + dt/2)
-        k3 = f(x + dt/2 * k2, t + dt/2)
-        k4 = f(x + dt * k3, t + dt)
-        return x + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
-    
-    def rk4_P(self, P, x1, x2, u, t, dt):
-        """
-        Custom Classical Runge-Kutta Integration for
-        Covariance propagation.
-        """
-        x_mid = (x1 + x2) / 2  # Midpoint x is approximated to lie between x1 and x2
-
-        P_dot = lambda P, x, t : self.F(x, u, t) @ P + P @ self.F(x, u, t).T + self.Q
-
-        k1 = P_dot(P, x1, t)
-        k2 = P_dot(P + dt/2 * k1, x_mid, t + dt/2)
-        k3 = P_dot(P + dt/2 * k2, x_mid, t + dt/2)
-        k4 = P_dot(P + dt * k3, x2, t + dt)
-
-        return P + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
-        
